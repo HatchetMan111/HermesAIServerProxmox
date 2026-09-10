@@ -233,6 +233,19 @@ else
 fi
 SHIM
 chmod +x /usr/bin/hermes
+cat <<'CREDS' >/usr/bin/hermes-credentials
+#!/bin/bash
+# Zeigt jederzeit die Zugangsdaten (WebUI-Passwort, API-Key, URLs).
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo "Hermes Zugangsdaten (Heimnetz)"
+echo "=============================="
+echo "WebUI Chat : http://${IP:-<IP>}:8787  (mit http:// oeffnen, NICHT https)"
+grep -E '^HERMES_WEBUI_PASSWORD=' /home/hermes/hermes-webui/.env 2>/dev/null || echo "(WebUI-Passwort nicht gefunden)"
+echo "Dashboard  : http://${IP:-<IP>}:9119"
+echo "OpenAI-API : http://${IP:-<IP>}:8642/v1"
+grep -E '^API_SERVER_KEY=' /home/hermes/.hermes/.env 2>/dev/null || echo "(API-Key nicht gefunden)"
+CREDS
+chmod +x /usr/bin/hermes-credentials
 msg_ok "Created Setup Helper"
 
 # Zugangsdaten sichern (geht beim Update nicht verloren)
@@ -241,7 +254,9 @@ cat <<EOF >/home/hermes/ACCESS.txt
 Hermes Heimnetz-Server — Direktzugriff (kein SSH-Tunnel)
 ========================================================
 WebUI Chat : http://${LOCAL_IP:-<IP>}:${WEBUI_PORT}
-  Passwort : ${WEBUI_PASSWORD}  (auch in ~/hermes-webui/.env)
+  WICHTIG: im Browser mit http:// oeffnen, NICHT https (kein TLS)!
+  Falls "nicht erreichbar": Proxy-Ausnahme fuer lokale Adressen setzen.
+  Passwort : ${WEBUI_PASSWORD}  (jederzeit: 'hermes-credentials')
 Dashboard  : http://${LOCAL_IP:-<IP>}:${DASHBOARD_PORT}
 OpenAI-API : http://${LOCAL_IP:-<IP>}:${API_PORT}/v1
   API-Key  : ${API_SERVER_KEY}  (auch in ~/.hermes/.env)
@@ -261,8 +276,8 @@ cp /home/hermes/ACCESS.txt /root/hermes-access.txt 2>/dev/null || true
 msg_info "Configuring Login Hints"
 cat <<'HINT' >/etc/profile.d/hermes-hint.sh
 if [[ "$(id -u)" -eq 0 ]]; then
-  echo "  Hermes WebUI direkt: http://$(hostname -I | awk '{print $1}'):8787  (Passwort: ~/ACCESS.txt bzw. /home/hermes/hermes-webui/.env)"
-  echo "  Setup ganz normal: 'hermes-setup' (volles 'hermes setup' mit allen Providern/Optionen wie sonst auch)."
+  echo "  Hermes WebUI direkt: http://$(hostname -I | awk '{print $1}'):8787  (mit http://, NICHT https)"
+  echo "  'hermes-credentials' zeigt Passwort + URLs, 'hermes-setup' richtet Provider ein (volles 'hermes setup')."
 fi
 HINT
 msg_ok "Configured Login Hints"

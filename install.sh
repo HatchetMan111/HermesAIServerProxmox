@@ -296,6 +296,60 @@ systemctl restart hermes-gateway hermes-dashboard hermes-webui || \
   die "Services konnten nicht gestartet werden. Prüfe: journalctl -u hermes-webui -e"
 ok "Services aktiviert."
 
+# --- Helfer + Zugangsdaten (bleiben auf dem System, scrollen nicht weg) --------
+cat >/usr/bin/hermes-setup <<'EOF'
+#!/usr/bin/env bash
+# Volles 'hermes setup' als hermes-User (alle Provider/Optionen wie sonst auch),
+# danach Dateirechte richten + Services neu starten.
+if [[ -x /home/hermes/.local/bin/hermes ]]; then
+  runuser -u hermes -- /home/hermes/.local/bin/hermes setup
+else
+  runuser -u hermes -- /usr/local/bin/hermes setup
+fi
+chown -R hermes:hermes /home/hermes
+systemctl restart hermes-gateway hermes-dashboard hermes-webui 2>/dev/null || true
+echo "Hermes setup complete. Services restarted."
+EOF
+chmod +x /usr/bin/hermes-setup
+
+cat >/usr/bin/hermes-credentials <<'EOF'
+#!/bin/bash
+# Zeigt jederzeit die Zugangsdaten (WebUI-Passwort, API-Key, URLs).
+IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
+echo "Hermes Zugangsdaten (Heimnetz)"
+echo "=============================="
+echo "WebUI Chat : http://${IP:-<IP>}:8787  (mit http:// oeffnen, NICHT https)"
+grep -E '^HERMES_WEBUI_PASSWORD=' /home/hermes/hermes-webui/.env 2>/dev/null || echo "(WebUI-Passwort nicht gefunden)"
+echo "Dashboard  : http://${IP:-<IP>}:9119"
+echo "OpenAI-API : http://${IP:-<IP>}:8642/v1"
+grep -E '^API_SERVER_KEY=' /home/hermes/.hermes/.env 2>/dev/null || echo "(API-Key nicht gefunden)"
+EOF
+chmod +x /usr/bin/hermes-credentials
+
+cat >/home/hermes/ACCESS.txt <<EOF
+Hermes Heimnetz-Server — Direktzugriff (kein SSH-Tunnel)
+========================================================
+WebUI Chat : http://${CONTAINER_IP}:${WEBUI_PORT}
+  WICHTIG: im Browser mit http:// oeffnen, NICHT https (kein TLS)!
+  Falls "nicht erreichbar": Proxy-Ausnahme fuer lokale Adressen setzen.
+  Login-Passwort: ${WEBUI_PASSWORD}  (auch via 'hermes-credentials')
+Dashboard  : http://${CONTAINER_IP}:${DASHBOARD_PORT}
+OpenAI-API : http://${CONTAINER_IP}:${API_PORT}/v1
+  API-Key  : ${API_KEY}
+Setup (EINMALIG, volles 'hermes setup'): 'hermes-setup'
+Nur Heimnetz/LAN — nicht ins Internet stellen!
+EOF
+chown "${HERMES_USER}:${HERMES_USER}" /home/hermes/ACCESS.txt
+chmod 600 /home/hermes/ACCESS.txt
+cp /home/hermes/ACCESS.txt /root/hermes-access.txt 2>/dev/null || true
+
+cat >'/etc/profile.d/hermes-hint.sh' <<'EOF'
+if [[ "$(id -u)" -eq 0 ]]; then
+  echo "  Hermes: 'hermes-credentials' zeigt WebUI-Passwort + URLs, 'hermes-setup' richtet Provider ein."
+fi
+EOF
+ok "Helfer + Zugangsdaten angelegt."
+
 # Auf /health warten (WebUI braucht beim ersten systemd-Start ggf. 1-3 Min)
 msg "Warte auf WebUI /health (max. 3 Min)..."
 for i in $(seq 1 36); do
@@ -342,7 +396,9 @@ cat <<EOF
   🎉 Hermes fertig — DIREKT im Browser, ohne SSH-Tunnel!
 ════════════════════════════════════════════════════════════
   💬 WebUI Chat  :  http://${CONTAINER_IP}:${WEBUI_PORT}   [${WEBUI_STATE}]
+     WICHTIG: mit http:// oeffnen, NICHT https! Ggf. Proxy-Ausnahme f. LAN.
      Login-Passwort: ${WEBUI_PASSWORD}
+     (steht auch in /root/hermes-access.txt, jederzeit: 'hermes-credentials')
 
   📊 Dashboard   :  http://${CONTAINER_IP}:${DASHBOARD_PORT}   [${DASH_STATE}]
 

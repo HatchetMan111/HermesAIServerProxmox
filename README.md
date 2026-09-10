@@ -44,6 +44,11 @@ Zugangsdaten stehen in:
 - `/home/hermes/hermes-webui/.env` → `HERMES_WEBUI_PASSWORD`
 - `/home/hermes/.hermes/.env` → `API_SERVER_KEY`
 - `/home/hermes/ACCESS.txt` + `/root/hermes-access.txt` → Übersicht
+- jederzeit im Container: `hermes-credentials` (zeigt URLs + Passwort + API-Key)
+
+Wichtig: im Browser mit `http://` öffnen (kein `https`, kein TLS).
+Bei „nicht erreichbar" trotz laufender Services: Proxy-Ausnahme für lokale
+Adressen setzen (v. a. auf verwalteten Workstations).
 
 ## Dienste
 
