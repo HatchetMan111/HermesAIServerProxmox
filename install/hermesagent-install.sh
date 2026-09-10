@@ -239,7 +239,12 @@ Dashboard  : http://${LOCAL_IP:-<IP>}:${DASHBOARD_PORT}
 OpenAI-API : http://${LOCAL_IP:-<IP>}:${API_PORT}/v1
   API-Key  : ${API_SERVER_KEY}  (auch in ~/.hermes/.env)
 
-Provider einmal einrichten: WebUI-Onboarding ODER 'hermes-setup'
+Provider einmal einrichten (ganz normal, alles wie sonst auch):
+  'hermes-setup' im Container — ruft das volle 'hermes setup' auf
+  (alle Provider: Nous Portal, Anthropic, OpenAI, OpenRouter, lokale
+  Endpunkte wie Ollama/LM Studio, Gateway, Messaging etc.).
+:8642/v1 ist nur der OpenAI-kompatible Gateway-Endpunkt, kein Provider-Limit.
+Die WebUI nutzt danach dieselbe Agent-Config (Onboarding-Wizard optional).
 Nur für Heimnetz/LAN — nicht ins Internet stellen!
 EOF
 chown hermes:hermes /home/hermes/ACCESS.txt
@@ -250,7 +255,7 @@ msg_info "Configuring Login Hints"
 cat <<'HINT' >/etc/profile.d/hermes-hint.sh
 if [[ "$(id -u)" -eq 0 ]]; then
   echo "  Hermes WebUI direkt: http://$(hostname -I | awk '{print $1}'):8787  (Passwort: ~/ACCESS.txt bzw. /home/hermes/hermes-webui/.env)"
-  echo "  Run 'hermes-setup' NUR falls du den Provider lieber im Terminal einrichten willst (WebUI-Onboarding geht auch)."
+  echo "  Setup ganz normal: 'hermes-setup' (volles 'hermes setup' mit allen Providern/Optionen wie sonst auch)."
 fi
 HINT
 msg_ok "Configured Login Hints"

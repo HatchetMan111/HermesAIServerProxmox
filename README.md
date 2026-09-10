@@ -23,14 +23,21 @@ Update später: Script erneut laufen lassen → updated Agent + WebUI + startet 
 curl -fsSL https://raw.githubusercontent.com/HatchetMan111/HermesAIServerProxmox/main/install.sh | bash
 ```
 
-## Nach dem Install (EINMALIG)
+## Nach dem Install (EINMALIG, ganz normal per Terminal)
 
-Entweder im Browser: WebUI öffnen → Onboarding-Wizard → Provider wählen.
-Oder im Container:
+Das volle `hermes setup` — wie sonst auch, mit allem (Nous Portal, Anthropic,
+OpenAI, OpenRouter, lokale Endpunkte wie Ollama/LM Studio, Gateway, Messaging etc.):
 
 ```bash
-hermes-setup   # Provider + Gateway, danach automatischer Service-Restart
+hermes-setup   # ruft ganz normal 'hermes setup' als hermes-User auf, startet danach Services neu
+# alternativ: su - hermes -c "hermes setup"
 ```
+
+Hinweis: `http://<LXC-IP>:8642/v1` ist nur der OpenAI-kompatible
+Gateway-Endpunkt (für andere Apps/Integrationen) — kein Provider-Limit.
+Die Provider selbst kommen aus deinem normalen `hermes setup`, die WebUI
+nutzt danach dieselbe Agent-Config. Der WebUI-Onboarding-Wizard geht auch,
+ist aber optional.
 
 Zugangsdaten stehen in:
 

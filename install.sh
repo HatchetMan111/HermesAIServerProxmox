@@ -11,8 +11,10 @@
 #   Dashboard     : http://<CONTAINER-IP>:9119
 #   OpenAI-API    : http://<CONTAINER-IP>:8642/v1  (Key in /home/hermes/.hermes/.env)
 #
-# Provider danach EINMAL einrichten — entweder im WebUI-Onboarding
-# (Settings → Providers) oder per:  su - hermes -c "hermes setup"
+# Provider danach EINMAL ganz normal per Terminal einrichten:
+#   su - hermes -c "hermes setup"   (voller Wizard wie sonst auch:
+#   Nous Portal, Anthropic, OpenAI, OpenRouter, Ollama/LM Studio, Gateway etc.)
+# :8642/v1 ist nur der OpenAI-kompatible Gateway-Endpunkt, kein Provider-Limit.
 #
 # Sicherheit: Nur für Heimnetz / LAN gedacht. WebUI-Passwort ist Pflicht,
 # sobald 0.0.0.0 gebunden wird (wird automatisch generiert).
@@ -275,18 +277,19 @@ cat <<EOF
 
   📊 Dashboard   :  http://${CONTAINER_IP}:${DASHBOARD_PORT}   [${DASH_STATE}]
 
-  🔌 OpenAI-API  :  http://${CONTAINER_IP}:${API_PORT}/v1   [Gateway: ${GW_STATE}]
+  🔌 OpenAI-kompatibel: http://${CONTAINER_IP}:${API_PORT}/v1   [Gateway: ${GW_STATE}]
+     (nur Gateway-Endpunkt, kein Provider-Limit)
      API-Key (Bearer): ${API_KEY}
      Datei: ${HERMES_ENV_FILE}
 
 ────────────────────────────────────────────────────────────
-  Nächster Schritt (EINMALIG Provider wählen):
-  1) Browser → WebUI öffnen → Onboarding-Wizard → Provider wählen,
-     ODER im Container:
-       su - ${HERMES_USER}
-       hermes setup        # Model-Provider + Gateway
-       hermes gateway restart  (falls nötig)
-       sudo systemctl restart hermes-webui hermes-dashboard
+  Nächster Schritt (EINMALIG, ganz normal per Terminal):
+    su - ${HERMES_USER}
+    hermes setup        # voller Wizard wie sonst auch: alle Provider,
+                        # Gateway, Messaging etc. (Nous, Anthropic, OpenAI,
+                        # OpenRouter, Ollama/LM Studio, ...)
+    Danach: sudo systemctl restart hermes-gateway hermes-webui hermes-dashboard
+    (WebUI-Onboarding im Browser geht alternativ, ist aber optional)
 
   Nützlich:
     ./ctl.sh status   (in ${WEBUI_DIR} als ${HERMES_USER})
