@@ -150,7 +150,8 @@ ProcSubset=pid
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable -q --now hermes-gateway
+systemctl enable -q hermes-gateway
+systemctl restart hermes-gateway
 msg_ok "Created Gateway Service"
 
 msg_info "Creating Dashboard Service (direkt auf 0.0.0.0 — kein Tunnel)"
@@ -177,7 +178,8 @@ ProcSubset=pid
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable -q --now hermes-dashboard
+systemctl enable -q hermes-dashboard
+systemctl restart hermes-dashboard
 msg_ok "Created Dashboard Service"
 
 msg_info "Creating WebUI Service (direkt auf 0.0.0.0)"
@@ -204,7 +206,8 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl enable -q --now hermes-webui
+systemctl enable -q hermes-webui
+systemctl restart hermes-webui
 msg_ok "Created WebUI Service"
 
 msg_info "Creating Setup Helper"

@@ -289,7 +289,10 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now hermes-gateway hermes-dashboard hermes-webui || \
+# enable + restart (nicht nur enable --now): --now startet bereits laufende
+# Services NICHT neu, alte Prozesse mit alten Flags würden weiterlaufen.
+systemctl enable hermes-gateway hermes-dashboard hermes-webui
+systemctl restart hermes-gateway hermes-dashboard hermes-webui || \
   die "Services konnten nicht gestartet werden. Prüfe: journalctl -u hermes-webui -e"
 ok "Services aktiviert."
 
