@@ -90,7 +90,10 @@ $STD su - hermes -c "git clone --depth 1 ${WEBUI_REPO} ~/hermes-webui"
 chown -R hermes:hermes /home/hermes/hermes-webui
 
 # WebUI .env: Direktzugriff + Pflicht-Passwort (Heimnetz)
-WEBUI_PASSWORD=$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16)
+# hex statt base64|tr|head: keine SIGPIPE-Abbrüche
+WEBUI_PASSWORD=$(openssl rand -hex 12 | cut -c1-16)
+[ "${#WEBUI_PASSWORD}" -ge 16 ] || WEBUI_PASSWORD=$(openssl rand -hex 16)
+WEBUI_PASSWORD=${WEBUI_PASSWORD:0:16}
 cat <<EOF >/home/hermes/hermes-webui/.env
 HERMES_WEBUI_HOST=0.0.0.0
 HERMES_WEBUI_PORT=${WEBUI_PORT}

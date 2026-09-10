@@ -49,7 +49,7 @@ msg "Installiere Systempakete (python3, git, nodejs optional)..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq \
-  curl ca-certificates git sudo openssl \
+  curl ca-certificates git sudo openssl procps iproute2 \
   python3 python3-venv python3-pip \
   build-essential 2>&1 | tail -n 3 || true
 ok "Systempakete bereit."
@@ -89,10 +89,10 @@ exec runuser -u ${HERMES_USER} -- ${HERMES_BIN} "\$@"
 EOF
 chmod +x /usr/bin/hermes
 
-# Web/Dashboard Extras (uv pip)
+# Web/Dashboard Extras (uv pip) — Fehler hier dürfen den Install nicht abbrechen
 msg "Installiere Hermes Web-Extras (web,pty)..."
 sudo -u "${HERMES_USER}" -H bash -c \
-  "VIRTUAL_ENV=${AGENT_DIR}/venv ${HERMES_BIN%/*}/uv pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || ${AGENT_DIR}/venv/bin/pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || true"
+  "VIRTUAL_ENV=${AGENT_DIR}/venv ${HERMES_BIN%/*}/uv pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || ${AGENT_DIR}/venv/bin/pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || true" || true
 
 # --- 4. API-Server Key (.env) ----------------------------------------------------
 HERMES_ENV_FILE="${HERMES_HOME_DIR}/.env"
@@ -141,7 +141,10 @@ if [ ! -f "${WEBUI_ENV}" ]; then
 fi
 WEBUI_PASSWORD="$(grep -E '^HERMES_WEBUI_PASSWORD=' "${WEBUI_ENV}" 2>/dev/null | cut -d= -f2- || true)"
 if [ -z "$WEBUI_PASSWORD" ]; then
-  WEBUI_PASSWORD="$(openssl rand -base64 18 | tr -dc 'A-Za-z0-9' | head -c 16)"
+  # hex statt base64|tr|head: keine SIGPIPE-Abbrüche unter 'set -o pipefail'
+  WEBUI_PASSWORD="$(openssl rand -hex 12 | cut -c1-16)"
+  [ "${#WEBUI_PASSWORD}" -ge 16 ] || WEBUI_PASSWORD="$(openssl rand -hex 16)"
+  WEBUI_PASSWORD="${WEBUI_PASSWORD:0:16}"
   msg "Generiere WebUI-Passwort..."
 fi
 # .env idempotent schreiben (nur unsere Keys anfassen)
@@ -157,34 +160,61 @@ chown "${HERMES_USER}:${HERMES_USER}" "${WEBUI_ENV}"
 chmod 600 "${WEBUI_ENV}"
 ok "WebUI .env: HOST=${WEBUI_HOST} PORT=${WEBUI_PORT} + Passwort gesetzt."
 
-# Python für WebUI bestimmen (Agent-venv bevorzugt)
-WEBUI_PYTHON="${AGENT_DIR}/venv/bin/python"
-command -v "${WEBUI_PYTHON}" >/dev/null 2>&1 || WEBUI_PYTHON="$(command -v python3)"
+# Python für WebUI bestimmen (Agent-venv bevorzugt, mehrere Layouts prüfen)
+WEBUI_PYTHON=""
+for _cand in "${AGENT_DIR}/venv/bin/python" \
+             "/usr/local/lib/hermes-agent/venv/bin/python" \
+             "/home/${HERMES_USER}/.hermes/hermes-agent/venv/bin/python"; do
+  if [ -x "$_cand" ]; then WEBUI_PYTHON="$_cand"; break; fi
+done
+if [ -z "$WEBUI_PYTHON" ]; then
+  WEBUI_PYTHON="$(command -v python3 || true)"
+fi
+[ -n "$WEBUI_PYTHON" ] && [ -x "$WEBUI_PYTHON" ] || die "Kein Python gefunden (weder Agent-venv noch python3). Log prüfen."
 msg "WebUI Python: ${WEBUI_PYTHON}"
+"${WEBUI_PYTHON}" --version || die "Python startet nicht: ${WEBUI_PYTHON}"
 
-# Erster Bootstrap-Lauf (legt venv + Deps an, startet kurz, prüft /health)
-msg "Bootstrap der WebUI (dauert beim ersten Mal 2-5 Min)..."
-sudo -u "${HERMES_USER}" -H bash -c \
-  "cd '${WEBUI_DIR}' && HERMES_HOME='${HERMES_HOME_DIR}' HERMES_WEBUI_HOST=127.0.0.1 HERMES_WEBUI_PORT=${WEBUI_PORT} '${WEBUI_PYTHON}' bootstrap.py --no-browser --foreground" &
+# Erster Bootstrap-Lauf (legt venv + Deps an, startet kurz, prüft /health).
+# Log nach /tmp, damit Fehler sichtbar sind statt stumm zu scheitern.
+BOOTSTRAP_LOG="/tmp/hermes-webui-bootstrap.log"
+msg "Bootstrap der WebUI (dauert beim ersten Mal 2-5 Min, Log: ${BOOTSTRAP_LOG})..."
+: >"${BOOTSTRAP_LOG}" || true
+runuser -u "${HERMES_USER}" -- bash -c \
+  "cd '${WEBUI_DIR}' && HERMES_HOME='${HERMES_HOME_DIR}' HERMES_WEBUI_HOST=127.0.0.1 HERMES_WEBUI_PORT=${WEBUI_PORT} '${WEBUI_PYTHON}' bootstrap.py --no-browser --foreground" \
+  >>"${BOOTSTRAP_LOG}" 2>&1 &
 BOOTSTRAP_PID=$!
 # max 10 Min warten, bis /health antwortet, dann wieder stoppen (systemd übernimmt)
+BOOTSTRAP_OK=0
 for i in $(seq 1 120); do
   if curl -fsS "http://127.0.0.1:${WEBUI_PORT}/health" >/dev/null 2>&1; then
+    BOOTSTRAP_OK=1
     ok "WebUI Bootstrap erfolgreich (/health antwortet)."
     break
   fi
   if ! kill -0 "${BOOTSTRAP_PID}" 2>/dev/null; then
-    warn "Bootstrap-Prozess beendet — prüfe Log, fahre trotzdem fort."
+    warn "Bootstrap-Prozess beendet, bevor /health antwortete. Letzte Log-Zeilen:"
+    tail -n 30 "${BOOTSTRAP_LOG}" >&2 || true
+    warn "Fahre trotzdem fort (systemd versucht den Start erneut)."
     break
   fi
   sleep 5
 done
+if [ "${BOOTSTRAP_OK}" -ne 1 ] && kill -0 "${BOOTSTRAP_PID}" 2>/dev/null; then
+  warn "Bootstrap antwortete nach 10 Min nicht — breche Wartezeit ab, fahre mit systemd fort."
+  tail -n 20 "${BOOTSTRAP_LOG}" >&2 || true
+fi
 kill "${BOOTSTRAP_PID}" 2>/dev/null || true
 sleep 2
 # Reste sauber beenden (bootstrap --foreground hinterlässt sonst Port-Belegung)
 pkill -f "${WEBUI_DIR}/bootstrap.py" 2>/dev/null || true
 pkill -f "${WEBUI_DIR}/server.py" 2>/dev/null || true
 sleep 2
+# Port muss wieder frei sein, sonst blockiert der Bootstrap-Rest den systemd-Start
+if curl -fsS "http://127.0.0.1:${WEBUI_PORT}/health" >/dev/null 2>&1; then
+  warn "Port ${WEBUI_PORT} noch belegt nach Bootstrap-Stopp — versuche erneut zu räumen..."
+  pkill -f "bootstrap.py.*${WEBUI_PORT}" 2>/dev/null || true
+  sleep 3
+fi
 
 # --- 6. systemd Services ------------------------------------------------------------
 msg "Richte systemd-Services ein (gateway, dashboard, webui)..."
@@ -258,14 +288,30 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now hermes-gateway hermes-dashboard hermes-webui
-ok "Services laufen."
+systemctl enable --now hermes-gateway hermes-dashboard hermes-webui || \
+  die "Services konnten nicht gestartet werden. Prüfe: journalctl -u hermes-webui -e"
+ok "Services aktiviert."
+
+# Auf /health warten (WebUI braucht beim ersten systemd-Start ggf. 1-3 Min)
+msg "Warte auf WebUI /health (max. 3 Min)..."
+for i in $(seq 1 36); do
+  curl -fsS "http://127.0.0.1:${WEBUI_PORT}/health" >/dev/null 2>&1 && break
+  sleep 5
+done
 
 # --- 7. Abschluss -------------------------------------------------------------------
-sleep 3
 systemctl is-active --quiet hermes-webui && WEBUI_STATE="aktiv ✅" || WEBUI_STATE="PRÜFEN ❌ (journalctl -u hermes-webui -e)"
 systemctl is-active --quiet hermes-dashboard && DASH_STATE="aktiv ✅" || DASH_STATE="PRÜFEN ❌"
 systemctl is-active --quiet hermes-gateway && GW_STATE="aktiv ✅" || GW_STATE="PRÜFEN ❌"
+if ! curl -fsS "http://127.0.0.1:${WEBUI_PORT}/health" >/dev/null 2>&1; then
+  warn "WebUI /health antwortet (noch) nicht. Diagnose:"
+  echo "--- systemctl ---" >&2
+  systemctl --no-pager status hermes-webui 2>&1 | head -n 20 >&2 || true
+  echo "--- journal (letzte 40 Zeilen) ---" >&2
+  journalctl -u hermes-webui --no-pager -e 2>&1 | tail -n 40 >&2 || true
+  echo "--- Ports ---" >&2
+  (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -E "8787|9119|8642" >&2 || echo "(keiner der Ports 8787/9119/8642 lauscht)" >&2
+fi
 
 cat <<EOF
 
