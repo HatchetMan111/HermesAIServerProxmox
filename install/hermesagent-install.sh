@@ -196,6 +196,7 @@ WorkingDirectory=/home/hermes/hermes-webui
 EnvironmentFile=/home/hermes/hermes-webui/.env
 Environment=HERMES_HOME=/home/hermes/.hermes
 Environment=HOME=/home/hermes
+Environment=HERMES_WEBUI_PRESERVE_ENV=1
 ExecStart=${WEBUI_PYTHON} /home/hermes/hermes-webui/bootstrap.py --no-browser --foreground --host 0.0.0.0 ${WEBUI_PORT}
 Restart=on-failure
 RestartSec=5

@@ -279,6 +279,7 @@ Environment=HERMES_HOME=${HERMES_HOME_DIR}
 Environment=HOME=/home/${HERMES_USER}
 Environment=HERMES_WEBUI_HOST=${WEBUI_HOST}
 Environment=HERMES_WEBUI_PORT=${WEBUI_PORT}
+Environment=HERMES_WEBUI_PRESERVE_ENV=1
 ExecStart=${WEBUI_PYTHON} ${WEBUI_DIR}/bootstrap.py --no-browser --foreground --host ${WEBUI_HOST} ${WEBUI_PORT}
 Restart=on-failure
 RestartSec=5
@@ -312,6 +313,25 @@ if ! curl -fsS "http://127.0.0.1:${WEBUI_PORT}/health" >/dev/null 2>&1; then
   echo "--- Ports ---" >&2
   (ss -tlnp 2>/dev/null || netstat -tlnp 2>/dev/null) | grep -E "8787|9119|8642" >&2 || echo "(keiner der Ports 8787/9119/8642 lauscht)" >&2
 fi
+
+# Bind-Check: hört die WebUI wirklich auf 0.0.0.0 (LAN) oder nur auf localhost?
+# aktiv ✅ + lokal gesund, aber im LAN "nicht erreichbar" = fast immer das hier.
+_WEBUI_LISTEN="$(ss -tln 2>/dev/null | grep -E ":${WEBUI_PORT}[[:space:]]" || true)"
+if [ -n "${_WEBUI_LISTEN}" ]; then
+  msg "WebUI lauscht auf: $(printf '%s' "${_WEBUI_LISTEN}" | awk '{print $4}' | tr '\n' ' ')"
+  if ! printf '%s' "${_WEBUI_LISTEN}" | grep -Eq "0\.0\.0\.0:${WEBUI_PORT}|\*:${WEBUI_PORT}|:::${WEBUI_PORT}"; then
+    warn "WebUI lauscht NUR auf localhost — aus dem LAN nicht erreichbar!"
+    warn "Fix: 'systemctl restart hermes-webui', 30s warten, erneut prüfen."
+    warn "Steht in ${WEBUI_ENV} wirklich HERMES_WEBUI_HOST=0.0.0.0?"
+  fi
+else
+  warn "Port ${WEBUI_PORT} lauscht gar nicht — journalctl -u hermes-webui -e prüfen."
+fi
+# Dashboard + API ebenfalls melden: wo lauschen sie?
+for _p in "${DASHBOARD_PORT}" "${API_PORT}"; do
+  _l="$(ss -tln 2>/dev/null | grep -E ":${_p}[[:space:]]" | awk '{print $4}' | tr '\n' ' ' || true)"
+  [ -n "$_l" ] && msg "Port ${_p} lauscht auf: ${_l}" || warn "Port ${_p} lauscht nicht!"
+done
 
 cat <<EOF
 
