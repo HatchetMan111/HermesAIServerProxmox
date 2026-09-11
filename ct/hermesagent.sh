@@ -20,7 +20,9 @@ echo "Hermes LXC-Ersteller ${SCRIPT_VERSION}"
 
 # --- Einstellungen (per ENV überschreibbar, z.B. CTID=200 bash ...) ------------
 CTID="${CTID:-$(pvesh get /cluster/nextid 2>/dev/null || echo 200)}"
-HOSTNAME="${HOSTNAME:-hermes-agent}"
+# HINWEIS: heißt absichtlich CT_HOSTNAME — $HOSTNAME ist in jeder Shell bereits
+# gesetzt (System-Hostname, hier "Prox") und würde den Default überschreiben!
+CT_HOSTNAME="${CT_HOSTNAME:-hermes-agent}"
 TEMPLATE="${TEMPLATE:-debian-13-standard_13.1-1_amd64.tar.zst}"
 TEMPLATE_STORAGE="${TEMPLATE_STORAGE:-local}"
 STORAGE="${STORAGE:-local-lvm}"
@@ -71,11 +73,11 @@ pveam list "${TEMPLATE_STORAGE}" 2>/dev/null | grep -q "${TEMPLATE}" \
   || { echo "FEHLER: Template '${TEMPLATE}' weder lokal noch am Mirror gefunden." >&2; exit 1; }
 
 # --- LXC erstellen ----------------------------------------------------------------
-echo "→ Erstelle LXC ${CTID} (${HOSTNAME}, ${CORES}C/${MEMORY}MB/${DISK}GB)..."
+echo "→ Erstelle LXC ${CTID} (${CT_HOSTNAME}, ${CORES}C/${MEMORY}MB/${DISK}GB)..."
 NET0="name=eth0,bridge=${BRIDGE},firewall=0,ip=${IP}"
 [ -n "${GATEWAY}" ] && NET0="${NET0},gw=${GATEWAY}"
 pct create "${CTID}" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" \
-  --hostname "${HOSTNAME}" --cores "${CORES}" --memory "${MEMORY}" \
+  --hostname "${CT_HOSTNAME}" --cores "${CORES}" --memory "${MEMORY}" \
   --rootfs "${STORAGE}:${DISK}" --net0 "${NET0}" \
   --unprivileged "${UNPRIVILEGED}" --features nesting=1 --onboot 1 --start 1
 
