@@ -15,7 +15,7 @@
 #
 set -euo pipefail
 
-SCRIPT_VERSION="2026-09-11-template-autodetect"
+SCRIPT_VERSION="2026-09-11-ct-hostname-curlfix"
 echo "Hermes LXC-Ersteller ${SCRIPT_VERSION}"
 
 # --- Einstellungen (per ENV überschreibbar, z.B. CTID=200 bash ...) ------------
@@ -91,8 +91,17 @@ pct exec "${CTID}" -- bash -c "ping -c1 -W2 1.1.1.1 >/dev/null 2>&1" \
   || { echo "FEHLER: Container hat kein Netzwerk." >&2; exit 1; }
 
 # --- UNSER Installer im Container (das ist der entscheidende Schritt) --------------
+# WICHTIG: curl ist in frischen Debian-Containern NICHT vorhanden → erst
+# installieren. Und Installer als DATEI laden + ausführen statt
+# "curl | bash": Bei "curl | bash" liefert ein fehlendes curl leeren Input,
+# das innere bash beendet sich dann mit Exit 0 — der Fehler fällt durch und
+# die Erfolgsmeldung druckt trotzdem (genau das ist passiert).
+echo "→ Installiere curl im Container..."
+pct exec "${CTID}" -- bash -c "apt-get update -qq && apt-get install -y -qq curl ca-certificates" \
+  || { echo "FEHLER: curl-Installation im Container schlug fehl." >&2; exit 1; }
 echo "→ Installiere Hermes + Direkt-WebUI im Container (dauert einige Minuten)..."
-pct exec "${CTID}" -- bash -c "curl -fsSL '${INSTALL_URL}' | bash"
+pct exec "${CTID}" -- bash -c "curl -fsSL '${INSTALL_URL}' -o /root/hermes-install.sh && bash /root/hermes-install.sh" \
+  || { echo "FEHLER: Install im Container schlug fehl — siehe Ausgabe oben." >&2; exit 1; }
 
 CIP="$(pct exec "${CTID}" -- hostname -I 2>/dev/null | awk '{print $1}')"
 CIP="${CIP:-<IP>}"
