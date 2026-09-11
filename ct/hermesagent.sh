@@ -106,6 +106,14 @@ pct exec "${CTID}" -- bash -c "curl -fsSL '${INSTALL_URL}' -o /root/hermes-insta
 
 CIP="$(pct exec "${CTID}" -- hostname -I 2>/dev/null | awk '{print $1}')"
 CIP="${CIP:-<IP>}"
+
+# Zugangsdaten AUS dem Container holen und HIER als Letztes zeigen —
+# sonst gehen sie im Install-Output unter.
+echo "→ Zugangsdaten:"
+pct exec "${CTID}" -- cat /root/hermes-access.txt 2>/dev/null \
+  || pct exec "${CTID}" -- hermes-credentials 2>/dev/null \
+  || echo "(Zugangsdaten konnten nicht ausgelesen werden — im Container 'hermes-credentials' ausführen.)"
+
 cat <<EOF
 
 ════════════════════════════════════════════════════════════

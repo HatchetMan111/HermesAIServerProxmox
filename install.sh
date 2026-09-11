@@ -440,3 +440,10 @@ cat <<EOF
       ins Internet stellen.
 ════════════════════════════════════════════════════════════
 EOF
+
+# Passwort NACH der Box separat wiederholen — sonst scrollt es weg.
+cat <<EOF
+
+  🔑 WebUI-Login: http://${CONTAINER_IP}:${WEBUI_PORT}  Passwort: ${WEBUI_PASSWORD}
+     (jederzeit im Container: 'hermes-credentials')
+EOF
