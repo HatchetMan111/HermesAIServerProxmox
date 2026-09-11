@@ -1,90 +1,93 @@
 #!/usr/bin/env bash
-_CS_DEFAULT_URL="https://raw.githubusercontent.com/community-scripts/ProxmoxVE/main"
-_cs_boot="${COMMUNITY_SCRIPTS_CORE_DIR:-$(dirname "${BASH_SOURCE[0]}")/../../core}/core/build.func"
-source "$_cs_boot" 2>/dev/null || source <(curl -fsSL "${COMMUNITY_SCRIPTS_CORE_URL:-https://raw.githubusercontent.com/community-scripts/core/main}/core/build.func")
-# Copyright (c) 2021-2026 community-scripts ORG
-# Author: Stephen Chin (steveonjava)
-# License: MIT | https://github.com/community-scripts/ProxmoxVE/raw/main/LICENSE
-# Source: https://hermes-agent.nousresearch.com/
-# Modified: Direkt-WebUI für Heimnetz (0.0.0.0, kein SSH-Tunnel nötig)
+#
+# Hermes Heimnetz-Server — LXC erstellen (Proxmox Host, als root)
+# =============================================================================
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/HatchetMan111/HermesAIServerProxmox/main/ct/hermesagent.sh)"
+#
+# HINWEIS: Bewusst KEIN community-scripts build.func — deren build_container
+# lädt das Install-Script immer aus dem offiziellen ProxmoxVE-Repo (ohne WebUI).
+# Darum erstellt dieses Script den LXC direkt per pct und führt DANACH unser
+# install.sh im Container aus. So landet garantiert unser Code im Container.
+#
+# Bestehender Container? Einfach install.sh darin als root laufen lassen:
+#   pct enter <CTID>
+#   curl -fsSL https://raw.githubusercontent.com/HatchetMan111/HermesAIServerProxmox/main/install.sh | bash
+#
+set -euo pipefail
 
-APP="Hermes Agent"
-var_tags="${var_tags:-ai;automation;agent}"
-var_cpu="${var_cpu:-2}"
-var_ram="${var_ram:-4096}"
-var_disk="${var_disk:-20}"
-var_os="${var_os:-debian}"
-var_version="${var_version:-13}"
-var_arm64="${var_arm64:-yes}"
-var_unprivileged="${var_unprivileged:-1}"
+# --- Einstellungen (per ENV überschreibbar, z.B. CTID=200 bash ...) ------------
+CTID="${CTID:-$(pvesh get /cluster/nextid 2>/dev/null || echo 200)}"
+HOSTNAME="${HOSTNAME:-hermesagent}"
+TEMPLATE="${TEMPLATE:-debian-13-standard_13.1-1_amd64.tar.zst}"
+TEMPLATE_STORAGE="${TEMPLATE_STORAGE:-local}"
+STORAGE="${STORAGE:-local-lvm}"
+BRIDGE="${BRIDGE:-vmbr0}"
+IP="${IP:-dhcp}"                 # z.B. 192.168.178.167/24 (+ GATEWAY=192.168.178.1)
+GATEWAY="${GATEWAY:-}"
+CORES="${CORES:-2}"
+MEMORY="${MEMORY:-4096}"
+DISK="${DISK:-20}"
+UNPRIVILEGED="${UNPRIVILEGED:-1}"
+INSTALL_URL="${INSTALL_URL:-https://raw.githubusercontent.com/HatchetMan111/HermesAIServerProxmox/main/install.sh}"
 
-header_info "$APP"
-variables
-color
-catch_errors
+[ "$(id -u)" -eq 0 ] || { echo "Bitte als root auf dem Proxmox-Host ausführen." >&2; exit 1; }
+command -v pct >/dev/null 2>&1 || { echo "pct nicht gefunden — kein Proxmox-Host?" >&2; exit 1; }
 
-function update_script() {
-  header_info
-  check_container_storage
-  check_container_resources
+# --- Update-Modus: Container existiert schon ------------------------------------
+if pct status "${CTID}" >/dev/null 2>&1; then
+  echo "→ Container ${CTID} existiert — Update statt Neuerstellung."
+  pct exec "${CTID}" -- bash -c "
+    set -e
+    if [[ -x /home/hermes/.local/bin/hermes ]]; then HB=/home/hermes/.local/bin/hermes; else HB=/usr/local/bin/hermes; fi
+    systemctl stop hermes-webui hermes-dashboard hermes-gateway 2>/dev/null || true
+    su - hermes -c \"\$HB update --yes\"
+    [[ -d /home/hermes/hermes-webui/.git ]] && su - hermes -c 'git -C ~/hermes-webui pull --ff-only' || true
+    chown -R hermes:hermes /home/hermes
+    systemctl start hermes-gateway hermes-dashboard hermes-webui 2>/dev/null || systemctl start hermes-dashboard hermes-webui 2>/dev/null || true
+  "
+  echo "✓ Update fertig."
+  exit 0
+fi
 
-  if [[ ! -x /home/hermes/.local/bin/hermes && ! -x /usr/local/bin/hermes ]]; then
-    msg_error "No Hermes Agent Installation Found!"
-    exit
-  fi
-  HERMES_BIN="/home/hermes/.local/bin/hermes"
-  [[ -x "$HERMES_BIN" ]] || HERMES_BIN="/usr/local/bin/hermes"
+# --- Template -------------------------------------------------------------------
+echo "→ Template prüfen (${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE})..."
+if ! pveam list "${TEMPLATE_STORAGE}" 2>/dev/null | grep -q "${TEMPLATE}"; then
+  echo "→ Lade Template..."
+  pveam update && pveam download "${TEMPLATE_STORAGE}" "${TEMPLATE}"
+fi
 
-  msg_info "Stopping Services"
-  systemctl stop hermes-webui hermes-dashboard hermes-gateway 2>/dev/null || true
-  msg_ok "Stopped Services"
+# --- LXC erstellen ----------------------------------------------------------------
+echo "→ Erstelle LXC ${CTID} (${HOSTNAME}, ${CORES}C/${MEMORY}MB/${DISK}GB)..."
+NET0="name=eth0,bridge=${BRIDGE},firewall=0,ip=${IP}"
+[ -n "${GATEWAY}" ] && NET0="${NET0},gw=${GATEWAY}"
+pct create "${CTID}" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" \
+  --hostname "${HOSTNAME}" --cores "${CORES}" --memory "${MEMORY}" \
+  --rootfs "${STORAGE}:${DISK}" --net0 "${NET0}" \
+  --unprivileged "${UNPRIVILEGED}" --features nesting=1 --onboot 1 --start 1
 
-  msg_info "Updating Hermes Agent"
-  $STD setsid --wait bash -c '
-    set -a; source /etc/default/hermes 2>/dev/null; set +a
-    /home/hermes/.local/bin/hermes update --yes 2>/dev/null || /usr/local/bin/hermes update --yes
-  '
-  # See https://github.com/community-scripts/ProxmoxVE/issues/17123
-  mapfile -t root_gateway_pids < <(ps -eo user=,pid=,args= | awk '$1 == "root" && $0 ~ /\/home\/hermes\/\.hermes\/hermes-agent\/venv\/bin\/python -m hermes_cli\.main gateway run --replace$/ { print $2 }')
-  if ((${#root_gateway_pids[@]})); then
-    kill -TERM "${root_gateway_pids[@]}" 2>/dev/null || true
-    for pid in "${root_gateway_pids[@]}"; do
-      while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
-    done
-  fi
-  chown -R hermes:hermes /home/hermes
-  msg_ok "Updated Hermes Agent"
+echo "→ Warte auf Container-Netzwerk (max. 3 Min)..."
+for _i in $(seq 1 36); do
+  pct status "${CTID}" 2>/dev/null | grep -q running || { sleep 5; continue; }
+  pct exec "${CTID}" -- bash -c "ping -c1 -W2 1.1.1.1 >/dev/null 2>&1" && break
+  sleep 5
+done
+pct exec "${CTID}" -- bash -c "ping -c1 -W2 1.1.1.1 >/dev/null 2>&1" \
+  || { echo "FEHLER: Container hat kein Netzwerk." >&2; exit 1; }
 
-  if [[ -d /home/hermes/hermes-webui/.git ]]; then
-    msg_info "Updating Hermes WebUI"
-    $STD su - hermes -c 'git -C ~/hermes-webui pull --ff-only'
-    chown -R hermes:hermes /home/hermes/hermes-webui
-    msg_ok "Updated Hermes WebUI"
-  fi
+# --- UNSER Installer im Container (das ist der entscheidende Schritt) --------------
+echo "→ Installiere Hermes + Direkt-WebUI im Container (dauert einige Minuten)..."
+pct exec "${CTID}" -- bash -c "curl -fsSL '${INSTALL_URL}' | bash"
 
-  msg_info "Starting Services"
-  systemctl start hermes-gateway hermes-dashboard hermes-webui 2>/dev/null || \
-    systemctl start hermes-dashboard hermes-webui 2>/dev/null || true
-  msg_ok "Started Services"
-  msg_ok "Updated successfully!"
-  exit
-}
+CIP="$(pct exec "${CTID}" -- hostname -I 2>/dev/null | awk '{print $1}')"
+CIP="${CIP:-<IP>}"
+cat <<EOF
 
-start
-build_container
-description
-
-msg_ok "Completed successfully!\n"
-echo -e "${CREATING}${GN}Hermes (Heimnetz-Server) ist fertig — WebUI direkt im Browser!${CL}"
-echo -e "${INFO}${YW} 💬 WebUI Chat (ohne SSH-Tunnel):${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8787${CL}"
-echo -e "${INFO}${YW} Login-Passwort steht in:${CL}"
-echo -e "${TAB}${BGN}/home/hermes/hermes-webui/.env  (HERMES_WEBUI_PASSWORD)${CL}"
-echo -e "${INFO}${YW} 📊 Dashboard (direkt):${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:9119${CL}"
-echo -e "${INFO}${YW} 🔌 OpenAI-kompatibler Gateway-Endpunkt (kein Provider-Limit):${CL}"
-echo -e "${TAB}${GATEWAY}${BGN}http://${IP}:8642/v1${CL}"
-echo -e "${INFO}${YW} API-Key steht in:${CL}"
-echo -e "${TAB}${BGN}/home/hermes/.hermes/.env  (API_SERVER_KEY)${CL}"
-echo -e "${INFO}${YW} Setup ganz normal per Terminal (alle Provider/Optionen wie sonst auch):${CL}"
-echo -e "${TAB}${BGN}hermes-setup  (= volles 'hermes setup', danach autom. Service-Restart)${CL}"
+════════════════════════════════════════════════════════════
+  🎉 Hermes Heimnetz-Server fertig — direkt im Browser!
+  💬 WebUI Chat : http://${CIP}:8787  (mit http://, NICHT https)
+     Passwort: im Container 'hermes-credentials' oder /root/hermes-access.txt
+  📊 Dashboard  : http://${CIP}:9119
+  🔌 API        : http://${CIP}:8642/v1
+  Setup (EINMALIG): im Container 'hermes-setup' (volles 'hermes setup')
+════════════════════════════════════════════════════════════
+EOF
