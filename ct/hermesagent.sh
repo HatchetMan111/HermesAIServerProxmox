@@ -20,7 +20,7 @@ echo "Hermes LXC-Ersteller ${SCRIPT_VERSION}"
 
 # --- Einstellungen (per ENV überschreibbar, z.B. CTID=200 bash ...) ------------
 CTID="${CTID:-$(pvesh get /cluster/nextid 2>/dev/null || echo 200)}"
-HOSTNAME="${HOSTNAME:-hermesagent}"
+HOSTNAME="${HOSTNAME:-hermes-agent}"
 TEMPLATE="${TEMPLATE:-debian-13-standard_13.1-1_amd64.tar.zst}"
 TEMPLATE_STORAGE="${TEMPLATE_STORAGE:-local}"
 STORAGE="${STORAGE:-local-lvm}"
