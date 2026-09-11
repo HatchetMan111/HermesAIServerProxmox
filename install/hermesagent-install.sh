@@ -239,9 +239,9 @@ cat <<'CREDS' >/usr/bin/hermes-credentials
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo "Hermes Zugangsdaten (Heimnetz)"
 echo "=============================="
-echo "WebUI Chat : http://${IP:-<IP>}:8787  (mit http:// oeffnen, NICHT https)"
+echo "Chat-WebUI (HIER einloggen): http://${IP:-<IP>}:8787  (mit http:// oeffnen, NICHT https)"
 grep -E '^HERMES_WEBUI_PASSWORD=' /home/hermes/hermes-webui/.env 2>/dev/null || echo "(WebUI-Passwort nicht gefunden)"
-echo "Dashboard  : http://${IP:-<IP>}:9119"
+echo "Agent-Dashboard (nur Status, kein Chat): http://${IP:-<IP>}:9119"
 echo "OpenAI-API : http://${IP:-<IP>}:8642/v1"
 grep -E '^API_SERVER_KEY=' /home/hermes/.hermes/.env 2>/dev/null || echo "(API-Key nicht gefunden)"
 CREDS
@@ -254,9 +254,10 @@ cat <<EOF >/home/hermes/ACCESS.txt
 Hermes Heimnetz-Server — Direktzugriff (kein SSH-Tunnel)
 ========================================================
 WebUI Chat : http://${LOCAL_IP:-<IP>}:${WEBUI_PORT}
-  WICHTIG: im Browser mit http:// oeffnen, NICHT https (kein TLS)!
+  HIER einloggen (DIE Oberflaeche). WICHTIG: mit http:// oeffnen, NICHT https!
   Falls "nicht erreichbar": Proxy-Ausnahme fuer lokale Adressen setzen.
   Passwort : ${WEBUI_PASSWORD}  (jederzeit: 'hermes-credentials')
+Agent-Dashboard (nur Status-Uebersicht, KEIN Chat): http://${LOCAL_IP:-<IP>}:${DASHBOARD_PORT}
 Dashboard  : http://${LOCAL_IP:-<IP>}:${DASHBOARD_PORT}
 OpenAI-API : http://${LOCAL_IP:-<IP>}:${API_PORT}/v1
   API-Key  : ${API_SERVER_KEY}  (auch in ~/.hermes/.env)

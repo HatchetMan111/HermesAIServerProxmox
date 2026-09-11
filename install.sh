@@ -318,9 +318,9 @@ cat >/usr/bin/hermes-credentials <<'EOF'
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo "Hermes Zugangsdaten (Heimnetz)"
 echo "=============================="
-echo "WebUI Chat : http://${IP:-<IP>}:8787  (mit http:// oeffnen, NICHT https)"
+echo "Chat-WebUI (HIER einloggen): http://${IP:-<IP>}:8787  (mit http:// oeffnen, NICHT https)"
 grep -E '^HERMES_WEBUI_PASSWORD=' /home/hermes/hermes-webui/.env 2>/dev/null || echo "(WebUI-Passwort nicht gefunden)"
-echo "Dashboard  : http://${IP:-<IP>}:9119"
+echo "Agent-Dashboard (nur Status, kein Chat): http://${IP:-<IP>}:9119"
 echo "OpenAI-API : http://${IP:-<IP>}:8642/v1"
 grep -E '^API_SERVER_KEY=' /home/hermes/.hermes/.env 2>/dev/null || echo "(API-Key nicht gefunden)"
 EOF
@@ -329,11 +329,11 @@ chmod +x /usr/bin/hermes-credentials
 cat >/home/hermes/ACCESS.txt <<EOF
 Hermes Heimnetz-Server — Direktzugriff (kein SSH-Tunnel)
 ========================================================
-WebUI Chat : http://${CONTAINER_IP}:${WEBUI_PORT}
+Chat-WebUI (DIE Oberflaeche, HIER einloggen): http://${CONTAINER_IP}:${WEBUI_PORT}
   WICHTIG: im Browser mit http:// oeffnen, NICHT https (kein TLS)!
   Falls "nicht erreichbar": Proxy-Ausnahme fuer lokale Adressen setzen.
   Login-Passwort: ${WEBUI_PASSWORD}  (auch via 'hermes-credentials')
-Dashboard  : http://${CONTAINER_IP}:${DASHBOARD_PORT}
+Agent-Dashboard (nur Status-Uebersicht, KEIN Chat): http://${CONTAINER_IP}:${DASHBOARD_PORT}
 OpenAI-API : http://${CONTAINER_IP}:${API_PORT}/v1
   API-Key  : ${API_KEY}
 Setup (EINMALIG, volles 'hermes setup'): 'hermes-setup'
@@ -395,12 +395,12 @@ cat <<EOF
 ════════════════════════════════════════════════════════════
   🎉 Hermes fertig — DIREKT im Browser, ohne SSH-Tunnel!
 ════════════════════════════════════════════════════════════
-  💬 WebUI Chat  :  http://${CONTAINER_IP}:${WEBUI_PORT}   [${WEBUI_STATE}]
+  💬 Chat-WebUI (HIER EINLOGGEN): http://${CONTAINER_IP}:${WEBUI_PORT}   [${WEBUI_STATE}]
      WICHTIG: mit http:// oeffnen, NICHT https! Ggf. Proxy-Ausnahme f. LAN.
      Login-Passwort: ${WEBUI_PASSWORD}
      (steht auch in /root/hermes-access.txt, jederzeit: 'hermes-credentials')
 
-  📊 Dashboard   :  http://${CONTAINER_IP}:${DASHBOARD_PORT}   [${DASH_STATE}]
+  📊 Agent-Dashboard (nur Status, KEIN Chat): http://${CONTAINER_IP}:${DASHBOARD_PORT}   [${DASH_STATE}]
 
   🔌 OpenAI-kompatibel: http://${CONTAINER_IP}:${API_PORT}/v1   [Gateway: ${GW_STATE}]
      (nur Gateway-Endpunkt, kein Provider-Limit)

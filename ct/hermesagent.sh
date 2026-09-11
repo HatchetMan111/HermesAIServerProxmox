@@ -84,9 +84,9 @@ cat <<EOF
 
 ════════════════════════════════════════════════════════════
   🎉 Hermes Heimnetz-Server fertig — direkt im Browser!
-  💬 WebUI Chat : http://${CIP}:8787  (mit http://, NICHT https)
+  💬 Chat-WebUI (HIER EINLOGGEN): http://${CIP}:8787  (mit http://, NICHT https)
      Passwort: im Container 'hermes-credentials' oder /root/hermes-access.txt
-  📊 Dashboard  : http://${CIP}:9119
+  📊 Agent-Dashboard (nur Status, KEIN Chat): http://${CIP}:9119
   🔌 API        : http://${CIP}:8642/v1
   Setup (EINMALIG): im Container 'hermes-setup' (volles 'hermes setup')
 ════════════════════════════════════════════════════════════

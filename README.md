@@ -2,8 +2,8 @@
 
 Privater Server fürs Heimnetz: Nach dem Install geht **sofort** im Browser:
 
-- 💬 WebUI Chat: `http://<LXC-IP>:8787` (mit Passwort, auto-generiert)
-- 📊 Dashboard: `http://<LXC-IP>:9119`
+- 💬 Chat-WebUI (**DIE** Oberfläche, hier einloggen): `http://<LXC-IP>:8787` (mit Passwort, auto-generiert)
+- 📊 Agent-Dashboard (nur Status-Übersicht, **kein** Chat): `http://<LXC-IP>:9119`
 - 🔌 OpenAI-API: `http://<LXC-IP>:8642/v1`
 
 Kein `ssh -L 9119:...`, kein `HERMES_WEBUI_HOST=... ./ctl.sh start` per Hand — alles läuft als systemd-Service mit Autostart.
