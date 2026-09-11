@@ -53,8 +53,11 @@ if [[ ! "$CONFIRM" =~ ^([yY][eE][sS]|[yY])$ ]]; then
 fi
 
 msg_info "Installing Hermes Agent"
+# cwd + VIRTUAL_ENV: sonst sucht uv von / aus nach /root/.venv (Permission denied)
 $STD setsid --wait bash -c '
   set -a; source /etc/default/hermes; set +a
+  unset VIRTUAL_ENV
+  cd /home/hermes
   export npm_config_yes=true
   bash <(curl -fsSL https://hermes-agent.nousresearch.com/install.sh) --skip-setup --hermes-home /home/hermes/.hermes --dir /home/hermes/.hermes/hermes-agent
 '
@@ -214,6 +217,8 @@ msg_info "Creating Setup Helper"
 cat <<'SETUP' >/usr/bin/hermes-setup
 #!/usr/bin/env bash
 set -a; source /etc/default/hermes; set +a
+unset VIRTUAL_ENV
+cd /home/hermes
 /home/hermes/.local/bin/hermes setup 2>/dev/null || /usr/local/bin/hermes setup
 chown -R hermes:hermes /home/hermes
 chmod 750 /home/hermes

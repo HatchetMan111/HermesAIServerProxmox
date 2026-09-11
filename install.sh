@@ -62,15 +62,18 @@ fi
 ok "User '${HERMES_USER}' existiert."
 
 # --- 3. Hermes Agent -------------------------------------------------------------
+# WICHTIG: Der offizielle Installer MUSS mit cwd im Hermes-Home und OHNE
+# VIRTUAL_ENV laufen. Sonst sucht uv von cwd=/root aus nach /root/.venv und
+# stirbt als hermes-User mit "Permission denied (os error 13)".
 if [ ! -x "/home/${HERMES_USER}/.local/bin/hermes" ] && [ ! -x "/usr/local/bin/hermes" ]; then
   msg "Installiere Hermes Agent (offizieller Installer, --skip-setup)..."
   sudo -u "${HERMES_USER}" -H bash -c \
-    "HOME=/home/${HERMES_USER} bash <(curl -fsSL https://hermes-agent.nousresearch.com/install.sh) --skip-setup --hermes-home ${HERMES_HOME_DIR} --dir ${AGENT_DIR}"
+    "unset VIRTUAL_ENV; cd '/home/${HERMES_USER}' && HOME='/home/${HERMES_USER}' bash <(curl -fsSL https://hermes-agent.nousresearch.com/install.sh) --skip-setup --hermes-home '${HERMES_HOME_DIR}' --dir '${AGENT_DIR}'"
   chown -R "${HERMES_USER}:${HERMES_USER}" "/home/${HERMES_USER}"
   git config --system --add safe.directory "${AGENT_DIR}" 2>/dev/null || true
 else
   msg "Hermes Agent bereits vorhanden — aktualisiere..."
-  sudo -u "${HERMES_USER}" -H bash -c "HOME=/home/${HERMES_USER} /home/${HERMES_USER}/.local/bin/hermes update --yes 2>/dev/null || /usr/local/bin/hermes update --yes 2>/dev/null || true"
+  sudo -u "${HERMES_USER}" -H bash -c "unset VIRTUAL_ENV; cd '/home/${HERMES_USER}' && HOME='/home/${HERMES_USER}' /home/${HERMES_USER}/.local/bin/hermes update --yes 2>/dev/null || /usr/local/bin/hermes update --yes 2>/dev/null || true"
 fi
 
 # hermes Binary finden (User-Install vs. FHS-Root-Install)
@@ -92,7 +95,7 @@ chmod +x /usr/bin/hermes
 # Web/Dashboard Extras (uv pip) — Fehler hier dürfen den Install nicht abbrechen
 msg "Installiere Hermes Web-Extras (web,pty)..."
 sudo -u "${HERMES_USER}" -H bash -c \
-  "VIRTUAL_ENV=${AGENT_DIR}/venv ${HERMES_BIN%/*}/uv pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || ${AGENT_DIR}/venv/bin/pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || true" || true
+  "cd '/home/${HERMES_USER}' && VIRTUAL_ENV=${AGENT_DIR}/venv ${HERMES_BIN%/*}/uv pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || ${AGENT_DIR}/venv/bin/pip install -q 'hermes-agent[web,pty]' 2>&1 | tail -n 2 || true" || true
 
 # --- 4. API-Server Key (.env) ----------------------------------------------------
 HERMES_ENV_FILE="${HERMES_HOME_DIR}/.env"
@@ -301,6 +304,8 @@ cat >/usr/bin/hermes-setup <<'EOF'
 #!/usr/bin/env bash
 # Volles 'hermes setup' als hermes-User (alle Provider/Optionen wie sonst auch),
 # danach Dateirechte richten + Services neu starten.
+cd /home/hermes || exit 1
+unset VIRTUAL_ENV
 if [[ -x /home/hermes/.local/bin/hermes ]]; then
   runuser -u hermes -- /home/hermes/.local/bin/hermes setup
 else

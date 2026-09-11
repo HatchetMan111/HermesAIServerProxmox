@@ -43,6 +43,7 @@ if pct status "${CTID}" >/dev/null 2>&1; then
   echo "→ Container ${CTID} existiert — Update statt Neuerstellung."
   pct exec "${CTID}" -- bash -c "
     set -e
+    unset VIRTUAL_ENV; cd /home/hermes
     if [[ -x /home/hermes/.local/bin/hermes ]]; then HB=/home/hermes/.local/bin/hermes; else HB=/usr/local/bin/hermes; fi
     systemctl stop hermes-webui hermes-dashboard hermes-gateway 2>/dev/null || true
     su - hermes -c \"\$HB update --yes\"
