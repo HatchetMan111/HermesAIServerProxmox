@@ -49,12 +49,23 @@ if pct status "${CTID}" >/dev/null 2>&1; then
   exit 0
 fi
 
-# --- Template -------------------------------------------------------------------
+# --- Template (Version nicht hart kodieren: Mirror ändert sie laufend) --------------
 echo "→ Template prüfen (${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE})..."
 if ! pveam list "${TEMPLATE_STORAGE}" 2>/dev/null | grep -q "${TEMPLATE}"; then
-  echo "→ Lade Template..."
+  echo "→ '${TEMPLATE}' nicht lokal — suche neueste Debian-13-Vorlage am Mirror..."
+  pveam update >/dev/null 2>&1 || true
+  NEWEST="$(pveam available --section system 2>/dev/null | awk '{print $2}' | grep -E '^debian-13-standard_.*\.tar\.(zst|gz)$' | sort -V | tail -n 1 || true)"
+  if [ -n "${NEWEST}" ]; then
+    echo "→ Nehme stattdessen: ${NEWEST}"
+    TEMPLATE="${NEWEST}"
+  fi
+fi
+if ! pveam list "${TEMPLATE_STORAGE}" 2>/dev/null | grep -q "${TEMPLATE}"; then
+  echo "→ Lade Template ${TEMPLATE}..."
   pveam update && pveam download "${TEMPLATE_STORAGE}" "${TEMPLATE}"
 fi
+pveam list "${TEMPLATE_STORAGE}" 2>/dev/null | grep -q "${TEMPLATE}" \
+  || { echo "FEHLER: Template '${TEMPLATE}' weder lokal noch am Mirror gefunden." >&2; exit 1; }
 
 # --- LXC erstellen ----------------------------------------------------------------
 echo "→ Erstelle LXC ${CTID} (${HOSTNAME}, ${CORES}C/${MEMORY}MB/${DISK}GB)..."
