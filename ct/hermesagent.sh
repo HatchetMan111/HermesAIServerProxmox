@@ -15,6 +15,9 @@
 #
 set -euo pipefail
 
+SCRIPT_VERSION="2026-09-11-template-autodetect"
+echo "Hermes LXC-Ersteller ${SCRIPT_VERSION}"
+
 # --- Einstellungen (per ENV überschreibbar, z.B. CTID=200 bash ...) ------------
 CTID="${CTID:-$(pvesh get /cluster/nextid 2>/dev/null || echo 200)}"
 HOSTNAME="${HOSTNAME:-hermesagent}"
