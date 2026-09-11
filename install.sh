@@ -50,7 +50,7 @@ export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq \
   curl ca-certificates git sudo openssl procps iproute2 \
-  python3 python3-venv python3-pip \
+  python3 python3-venv python3-pip libatomic1 \
   build-essential 2>&1 | tail -n 3 || true
 ok "Systempakete bereit."
 
@@ -65,6 +65,16 @@ ok "User '${HERMES_USER}' existiert."
 # WICHTIG: Der offizielle Installer MUSS mit cwd im Hermes-Home und OHNE
 # VIRTUAL_ENV laufen. Sonst sucht uv von cwd=/root aus nach /root/.venv und
 # stirbt als hermes-User mit "Permission denied (os error 13)".
+# Der offizielle Installer ruft sudo für Systempakete auf (libatomic1,
+# Playwright-Deps, ...). hermes hat kein Passwort → sudo würde endlos fragen.
+# Darum temporär NOPASSWD — wird per EXIT-Trap garantiert wieder entfernt.
+printf '%s\n' "hermes ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-hermes-install
+chmod 440 /etc/sudoers.d/99-hermes-install
+visudo -cf /etc/sudoers.d/99-hermes-install >/dev/null 2>&1 \
+  || rm -f /etc/sudoers.d/99-hermes-install
+_cleanup_install_sudoers() { rm -f /etc/sudoers.d/99-hermes-install; }
+trap _cleanup_install_sudoers EXIT
+
 if [ ! -x "/home/${HERMES_USER}/.local/bin/hermes" ] && [ ! -x "/usr/local/bin/hermes" ]; then
   msg "Installiere Hermes Agent (offizieller Installer, --skip-setup)..."
   sudo -u "${HERMES_USER}" -H bash -c \

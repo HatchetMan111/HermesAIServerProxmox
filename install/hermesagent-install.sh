@@ -22,7 +22,7 @@ API_PORT="8642"
 WEBUI_REPO="https://github.com/nesquena/hermes-webui.git"
 
 msg_info "Installing Dependencies"
-$STD apt install -y git curl ca-certificates sudo openssl python3 python3-venv python3-pip build-essential
+$STD apt install -y git curl ca-certificates sudo openssl python3 python3-venv python3-pip libatomic1 build-essential
 msg_ok "Installed Dependencies"
 
 NODE_VERSION="22" setup_nodejs
@@ -53,6 +53,13 @@ if [[ ! "$CONFIRM" =~ ^([yY][eE][sS]|[yY])$ ]]; then
 fi
 
 msg_info "Installing Hermes Agent"
+# Offizieller Installer fragt per sudo nach Systempaketen (hermes hat kein
+# Passwort → würde hängen). Temporär NOPASSWD, danach sofort entfernen
+# (kein EXIT-Trap: build.func nutzt eigene Traps).
+printf '%s\n' "hermes ALL=(ALL) NOPASSWD:ALL" >/etc/sudoers.d/99-hermes-install
+chmod 440 /etc/sudoers.d/99-hermes-install
+visudo -cf /etc/sudoers.d/99-hermes-install >/dev/null 2>&1 \
+  || rm -f /etc/sudoers.d/99-hermes-install
 # cwd + VIRTUAL_ENV: sonst sucht uv von / aus nach /root/.venv (Permission denied)
 $STD setsid --wait bash -c '
   set -a; source /etc/default/hermes; set +a
@@ -72,6 +79,7 @@ HERMES_BIN="/home/hermes/.local/bin/hermes"
 
 msg_info "Installing Web Extras (web,pty)"
 $STD su - hermes -c "VIRTUAL_ENV=/home/hermes/.hermes/hermes-agent/venv ${HERMES_BIN%/*}/uv pip install 'hermes-agent[web,pty]' || /home/hermes/.hermes/hermes-agent/venv/bin/pip install 'hermes-agent[web,pty]'"
+rm -f /etc/sudoers.d/99-hermes-install
 msg_ok "Installed Web Extras"
 
 msg_info "Configuring API Server (LAN, 0.0.0.0)"
